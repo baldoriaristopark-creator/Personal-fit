@@ -381,25 +381,36 @@ function BottomNav({ tab, setTab }) {
 // ---------------- 1. PROFILO ----------------
 function Profilo({ profile, setProfile }) {
   const obiettivi = ["Ipertrofia", "Dimagrimento", "Forza", "Resistenza", "Ricomposizione", "Mantenimento"];
+  const [draft, setDraft] = useState(profile);
+  const [savedMsg, setSavedMsg] = useState(false);
+
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(profile);
+
+  const handleSave = () => {
+    setProfile(draft);
+    setSavedMsg(true);
+    setTimeout(() => setSavedMsg(false), 2000);
+  };
+
   return (
     <div>
       <SectionTitle>Dati personali</SectionTitle>
       <Card>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <Input label="Nome" value={profile.nome} onChange={(e) => setProfile({ ...profile, nome: e.target.value })} placeholder="Il tuo nome" />
+          <Input label="Nome" value={draft.nome} onChange={(e) => setDraft({ ...draft, nome: e.target.value })} placeholder="Il tuo nome" />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <Input label="Età" type="number" value={profile.eta} onChange={(e) => setProfile({ ...profile, eta: e.target.value })} placeholder="30" />
-            <Select label="Sesso" value={profile.sesso} onChange={(e) => setProfile({ ...profile, sesso: e.target.value })} options={[{ value: "M", label: "Maschio" }, { value: "F", label: "Femmina" }]} />
+            <Input label="Età" type="number" value={draft.eta} onChange={(e) => setDraft({ ...draft, eta: e.target.value })} placeholder="30" />
+            <Select label="Sesso" value={draft.sesso} onChange={(e) => setDraft({ ...draft, sesso: e.target.value })} options={[{ value: "M", label: "Maschio" }, { value: "F", label: "Femmina" }]} />
           </div>
-          <Input label="Altezza (cm)" type="number" value={profile.altezza} onChange={(e) => setProfile({ ...profile, altezza: e.target.value })} placeholder="178" />
+          <Input label="Altezza (cm)" type="number" value={draft.altezza} onChange={(e) => setDraft({ ...draft, altezza: e.target.value })} placeholder="178" />
         </div>
       </Card>
 
       <SectionTitle>Obiettivi</SectionTitle>
       <Card>
-        <Select label="Obiettivo principale" value={profile.obiettivo} onChange={(e) => setProfile({ ...profile, obiettivo: e.target.value })} options={obiettivi.map((o) => ({ value: o, label: o }))} />
+        <Select label="Obiettivo principale" value={draft.obiettivo} onChange={(e) => setDraft({ ...draft, obiettivo: e.target.value })} options={obiettivi.map((o) => ({ value: o, label: o }))} />
         <div style={{ marginTop: 10 }}>
-          <Select label="Livello di attività" value={profile.attivita} onChange={(e) => setProfile({ ...profile, attivita: e.target.value })} options={ATTIVITA_OPTS} />
+          <Select label="Livello di attività" value={draft.attivita} onChange={(e) => setDraft({ ...draft, attivita: e.target.value })} options={ATTIVITA_OPTS} />
         </div>
       </Card>
 
@@ -407,23 +418,34 @@ function Profilo({ profile, setProfile }) {
       <Card>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, marginBottom: 6 }}>Allergie</div>
-          <TagInput items={profile.allergie} onChange={(v) => setProfile({ ...profile, allergie: v })} placeholder="Es. arachidi" />
+          <TagInput items={draft.allergie} onChange={(v) => setDraft({ ...draft, allergie: v })} placeholder="Es. arachidi" />
         </div>
         <div>
           <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, marginBottom: 6 }}>Intolleranze</div>
-          <TagInput items={profile.intolleranze} onChange={(v) => setProfile({ ...profile, intolleranze: v })} placeholder="Es. lattosio" />
+          <TagInput items={draft.intolleranze} onChange={(v) => setDraft({ ...draft, intolleranze: v })} placeholder="Es. lattosio" />
         </div>
       </Card>
 
       <SectionTitle>Preferenze alimentari</SectionTitle>
       <Card>
-        <TagInput items={profile.preferenze} onChange={(v) => setProfile({ ...profile, preferenze: v })} placeholder="Es. vegetariano, no pesce" />
+        <TagInput items={draft.preferenze} onChange={(v) => setDraft({ ...draft, preferenze: v })} placeholder="Es. vegetariano, no pesce" />
       </Card>
 
       <SectionTitle>Note</SectionTitle>
       <Card>
-        <textarea value={profile.note} onChange={(e) => setProfile({ ...profile, note: e.target.value })} placeholder="Infortuni, limitazioni, altro..." rows={3} style={{ width: "100%", background: CARD2, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 12px", color: TEXT, fontSize: 14, resize: "vertical" }} />
+        <textarea value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} placeholder="Infortuni, limitazioni, altro..." rows={3} style={{ width: "100%", background: CARD2, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 12px", color: TEXT, fontSize: 14, resize: "vertical" }} />
       </Card>
+
+      <div style={{ marginTop: 24, marginBottom: 10, display: "flex", justifyContent: "center", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        {savedMsg && (
+          <span style={{ fontSize: 12, color: GOOD, fontWeight: 700, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 20, padding: "8px 14px" }}>
+            ✓ Salvato
+          </span>
+        )}
+        <Button onClick={handleSave} style={{ padding: "13px 32px", boxShadow: "0 4px 14px rgba(232,50,58,0.35)", opacity: isDirty || savedMsg ? 1 : 0.6, width: "100%" }}>
+          Salva profilo
+        </Button>
+      </div>
     </div>
   );
 }
