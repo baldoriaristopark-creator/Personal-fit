@@ -216,6 +216,9 @@ const ATTIVITA_OPTS = [
 ];
 
 // Metodo US Navy: stima % massa grassa da circonferenze (cm), senza bisogno di plicometro/bioimpedenza.
+// Nota: la formula si basa sulla differenza vita-collo; con misure sproporzionate (es. vita troppo
+// stretta rispetto a peso/altezza) il risultato matematico diventa inattendibile, quindi lo scartiamo
+// fuori da un intervallo fisiologicamente plausibile (3%-60%) piuttosto che mostrare un numero falso.
 function calcBodyFatNavy({ sesso, vita, collo, altezza, fianchi }) {
   const w = Number(vita), n = Number(collo), h = Number(altezza), hip = Number(fianchi);
   if (!w || !n || !h) return null;
@@ -223,11 +226,11 @@ function calcBodyFatNavy({ sesso, vita, collo, altezza, fianchi }) {
     if (!hip) return null;
     if (w + hip - n <= 0) return null;
     const bf = 495 / (1.29579 - 0.35004 * Math.log10(w + hip - n) + 0.221 * Math.log10(h)) - 450;
-    return bf > 0 && bf < 70 ? bf : null;
+    return bf >= 3 && bf <= 60 ? bf : null;
   }
   if (w - n <= 0) return null;
   const bf = 495 / (1.0324 - 0.19077 * Math.log10(w - n) + 0.15456 * Math.log10(h)) - 450;
-  return bf > 0 && bf < 70 ? bf : null;
+  return bf >= 3 && bf <= 60 ? bf : null;
 }
 
 // ---------------- APP ROOT ----------------
@@ -468,8 +471,11 @@ function Profilo({ profile, setProfile }) {
 // ---------------- 2. COMPOSIZIONE CORPOREA ----------------
 function Composizione({ measurements, setMeasurements, profile }) {
   const [form, setForm] = useState({ peso: "", altezza: "", vita: "", collo: "", fianchi: "", petto: "", braccio: "", coscia: "", massaGrassa: "", note: "" });
+  const [expandedId, setExpandedId] = useState(null);
 
   const autoBodyFat = calcBodyFatNavy({ sesso: profile?.sesso, vita: form.vita, collo: form.collo, altezza: form.altezza, fianchi: form.fianchi });
+  const hasEnoughInputForAuto = form.vita && form.collo && form.altezza && (profile?.sesso !== "F" || form.fianchi);
+  const implausible = hasEnoughInputForAuto && !autoBodyFat;
 
   const addEntry = () => {
     if (!form.peso) return;
@@ -507,6 +513,13 @@ function Composizione({ measurements, setMeasurements, profile }) {
             {autoBodyFat ? (
               <div style={{ background: CARD2, border: `1px solid ${GOOD}`, borderRadius: 8, padding: "10px 12px", color: GOOD, fontSize: 14, fontWeight: 800 }}>
                 {round1(autoBodyFat)}% <span style={{ color: MUTED, fontWeight: 500, fontSize: 11 }}>(calcolata)</span>
+              </div>
+            ) : implausible ? (
+              <div>
+                <Input type="number" value={form.massaGrassa} onChange={(e) => setForm({ ...form, massaGrassa: e.target.value })} placeholder="Inserisci manualmente" />
+                <div style={{ fontSize: 11, color: ACCENT2, marginTop: 4 }}>
+                  Vita e collo troppo vicine per un calcolo affidabile: controlla le misure o inserisci il valore a mano.
+                </div>
               </div>
             ) : (
               <Input type="number" value={form.massaGrassa} onChange={(e) => setForm({ ...form, massaGrassa: e.target.value })} placeholder="Inserisci vita e collo per il calcolo auto" />
@@ -549,14 +562,41 @@ function Composizione({ measurements, setMeasurements, profile }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {measurements.length === 0 && <EmptyHint text="Nessuna misurazione registrata." />}
         {measurements.slice().reverse().map((m) => (
-          <Card key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px" }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{m.data}</div>
-              <div style={{ fontSize: 12, color: MUTED }}>
-                {m.peso} kg{m.vita ? ` · vita ${m.vita}cm` : ""}{m.massaGrassa ? ` · MG ${m.massaGrassa}%` : ""}{m.note ? ` · ${m.note}` : ""}
+          <Card key={m.id} style={{ padding: "10px 14px", cursor: "pointer" }} onClick={() => setExpandedId(expandedId === m.id ? null : m.id)}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{m.data}</div>
+                <div style={{ fontSize: 12, color: MUTED }}>
+                  {m.peso} kg{m.vita ? ` · vita ${m.vita}cm` : ""}{m.massaGrassa ? ` · MG ${m.massaGrassa}%` : ""}{m.note ? ` · ${m.note}` : ""}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ color: MUTED, transform: expandedId === m.id ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
+                  <Icon d="M6 9l6 6 6-6" size={16} />
+                </span>
+                <button onClick={(e) => { e.stopPropagation(); removeEntry(m.id); }} style={{ ...iconBtnStyle, color: ACCENT }}><Icon d="M6 6l12 12M6 18L18 6" size={14} /></button>
               </div>
             </div>
-            <button onClick={() => removeEntry(m.id)} style={{ ...iconBtnStyle, color: ACCENT }}><Icon d="M6 6l12 12M6 18L18 6" size={14} /></button>
+            {expandedId === m.id && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}`, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 }}>
+                {[
+                  ["Peso", m.peso, "kg"], ["Altezza", m.altezza, "cm"], ["Vita", m.vita, "cm"], ["Collo", m.collo, "cm"],
+                  ["Fianchi", m.fianchi, "cm"], ["Petto", m.petto, "cm"], ["Braccio", m.braccio, "cm"], ["Coscia", m.coscia, "cm"],
+                  ["Massa grassa", m.massaGrassa, "%"],
+                ].filter(([, v]) => v).map(([label, v, unit]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", borderBottom: `1px solid ${BORDER}`, paddingBottom: 4 }}>
+                    <span style={{ color: MUTED }}>{label}</span>
+                    <span style={{ fontWeight: 700 }}>{v}{unit}</span>
+                  </div>
+                ))}
+                {m.note && (
+                  <div style={{ gridColumn: "1 / -1", marginTop: 4 }}>
+                    <div style={{ color: MUTED, marginBottom: 2 }}>Note</div>
+                    <div>{m.note}</div>
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
         ))}
       </div>
