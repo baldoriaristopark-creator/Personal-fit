@@ -664,7 +664,82 @@ function computePRs(workouts) {
   return Object.entries(map).map(([nome, max]) => ({ nome, max })).sort((a, b) => b.max - a.max);
 }
 
+// Emette un breve bip usando l'audio nativo del browser, senza bisogno di file esterni.
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.25, 0.5].forEach((delay) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.2);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.2);
+    });
+  } catch (e) {
+    console.error("beep failed", e);
+  }
+}
+
+function clampTimer(v) {
+  return Math.min(90, Math.max(10, v));
+}
+
+function RestTimer({ initialSeconds, onClose }) {
+  const [duration, setDuration] = useState(clampTimer(Math.round((Number(initialSeconds) || 60) / 15) * 15));
+  const [remaining, setRemaining] = useState(duration);
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    if (!running) setRemaining(duration);
+  }, [duration, running]);
+
+  useEffect(() => {
+    if (!running) return;
+    if (remaining <= 0) {
+      playBeep();
+      setRunning(false);
+      return;
+    }
+    const t = setTimeout(() => setRemaining((r) => r - 1), 1000);
+    return () => clearTimeout(t);
+  }, [running, remaining]);
+
+  const adjust = (delta) => setDuration((d) => clampTimer(d + delta));
+  const pct = duration ? ((duration - remaining) / duration) * 100 : 0;
+
+  return (
+    <Card style={{ marginTop: 8, background: CARD2 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{ fontSize: 12, color: MUTED, fontWeight: 700 }}>RECUPERO</span>
+        <button onClick={onClose} style={{ ...iconBtnStyle, padding: 4 }}><Icon d="M6 6l12 12M6 18L18 6" size={13} /></button>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
+        <button onClick={() => adjust(-15)} disabled={running} style={{ ...iconBtnStyle, opacity: running ? 0.3 : 1, padding: "10px 14px" }}>−15</button>
+        <div style={{ textAlign: "center", minWidth: 80 }}>
+          <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 40, letterSpacing: 1, color: remaining <= 3 && running ? ACCENT : TEXT }}>
+            {remaining}s
+          </div>
+          <div style={{ height: 4, background: BORDER, borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${pct}%`, background: ACCENT, transition: "width 1s linear" }} />
+          </div>
+        </div>
+        <button onClick={() => adjust(15)} disabled={running} style={{ ...iconBtnStyle, opacity: running ? 0.3 : 1, padding: "10px 14px" }}>+15</button>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <Button onClick={() => setRunning(!running)} style={{ flex: 1 }}>{running ? "Pausa" : remaining === 0 ? "Ricomincia" : "Avvia"}</Button>
+        <Button variant="secondary" onClick={() => { setRunning(false); setRemaining(duration); }} style={{ flex: 1 }}>Reset</Button>
+      </div>
+    </Card>
+  );
+}
+
 function WorkoutCard({ workout, editing, onEdit, onRemove, onUpdate, openLog, onToggleLog }) {
+  const [timerFor, setTimerFor] = useState(null);
   const addExercise = () => onUpdate({ esercizi: [...workout.esercizi, { id: uid(), nome: "", gruppoMuscolare: "", serie: 3, ripetizioni: "10", carico: "", recupero: "90" }] });
   const updateExercise = (id, patch) => onUpdate({ esercizi: workout.esercizi.map((e) => (e.id === id ? { ...e, ...patch } : e)) });
   const removeExercise = (id) => onUpdate({ esercizi: workout.esercizi.filter((e) => e.id !== id) });
@@ -719,9 +794,17 @@ function WorkoutCard({ workout, editing, onEdit, onRemove, onUpdate, openLog, on
                 </div>
               </div>
             ) : (
-              <div key={e.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, borderBottom: `1px solid ${BORDER}`, paddingBottom: 6 }}>
-                <span>{e.nome || "—"}{e.gruppoMuscolare ? <span style={{ color: MUTED, fontSize: 11 }}> · {e.gruppoMuscolare}</span> : ""}</span>
-                <span style={{ color: MUTED }}>{e.serie}x{e.ripetizioni} {e.carico ? `· ${e.carico}kg` : ""} {e.recupero ? `· rec. ${e.recupero}s` : ""}</span>
+              <div key={e.id}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, borderBottom: `1px solid ${BORDER}`, paddingBottom: 6 }}>
+                  <span>{e.nome || "—"}{e.gruppoMuscolare ? <span style={{ color: MUTED, fontSize: 11 }}> · {e.gruppoMuscolare}</span> : ""}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: MUTED }}>{e.serie}x{e.ripetizioni} {e.carico ? `· ${e.carico}kg` : ""} {e.recupero ? `· rec. ${e.recupero}s` : ""}</span>
+                    <button onClick={() => setTimerFor(timerFor === e.id ? null : e.id)} style={{ ...iconBtnStyle, color: timerFor === e.id ? ACCENT : TEXT, padding: 5 }} aria-label="Timer di recupero">
+                      <Icon d="M12 8v4l3 3M12 2a10 10 0 100 20 10 10 0 000-20z" size={14} />
+                    </button>
+                  </div>
+                </div>
+                {timerFor === e.id && <RestTimer initialSeconds={e.recupero} onClose={() => setTimerFor(null)} />}
               </div>
             )
           )}
