@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 const ACCENT = "#E8323A";
 const ACCENT2 = "#F2C94C";
@@ -12,6 +12,37 @@ const MUTED = "#8B8B90";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const round1 = (n) => Math.round(n * 10) / 10;
+
+// Ridimensiona e comprime un'immagine caricata dall'utente in un base64 leggero,
+// così da non riempire lo spazio di storage limitato del browser.
+function compressImageFile(file, maxDim = 500, quality = 0.6) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Lettura file fallita"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Immagine non valida"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 const TABS = [
   { id: "dashboard", label: "Home", icon: "M3 12l9-9 9 9M5 10v10h14V10" },
@@ -132,10 +163,10 @@ const miniInput = { background: CARD2, border: `1px solid ${BORDER}`, borderRadi
 
 // ---------------- DATI ----------------
 const DEFAULT_DATA = {
-  profile: { nome: "", eta: "", sesso: "M", altezza: "", obiettivo: "Ipertrofia", attivita: "1.375", allergie: [], intolleranze: [], preferenze: [], note: "" },
+  profile: { nome: "", eta: "", sesso: "M", altezza: "", obiettivo: "Ipertrofia", attivita: "1.375", allergie: [], intolleranze: [], preferenze: [], note: "", fotoProfilo: "" },
   measurements: [],
   workouts: [],
-  nutrition: { kcalTarget: "", proteine: "", carboidrati: "", grassi: "", pasti: [], alimentiDaEvitare: [], listaSpesa: [] },
+  nutrition: { kcalTarget: "", proteine: "", carboidrati: "", grassi: "", pasti: [], alimentiDaEvitare: [], listaSpesa: [], pianoGenerato: null },
 };
 
 // Adapter di persistenza basato su localStorage: i dati restano sul dispositivo/browser
@@ -262,13 +293,31 @@ export default function App() {
     await saveUsers(next);
   };
 
+  const updateUserAvatar = async (userId, avatarDataUrl) => {
+    setUsers((prev) => {
+      const next = prev.map((u) => (u.id === userId ? { ...u, avatar: avatarDataUrl || "" } : u));
+      saveUsers(next);
+      return next;
+    });
+  };
+
   if (usersLoading) {
     return <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontFamily: "'Inter', system-ui, sans-serif" }}>Caricamento…</div>;
   }
   if (!currentUser) {
     return <UserSelect users={users} onSelect={setCurrentUser} onCreate={handleCreateUser} onDelete={handleDeleteUser} />;
   }
-  return <UserApp user={currentUser} onSwitchUser={() => setCurrentUser(null)} />;
+  return <UserApp user={currentUser} onSwitchUser={() => setCurrentUser(null)} updateUserAvatar={updateUserAvatar} />;
+}
+
+function Avatar({ src, nome, size = 32 }) {
+  const style = { width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 };
+  if (src) return <img src={src} alt={nome || "avatar"} style={style} />;
+  return (
+    <div style={{ ...style, background: CARD2, border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontWeight: 800, fontSize: size * 0.4 }}>
+      {(nome || "?").trim().charAt(0).toUpperCase()}
+    </div>
+  );
 }
 
 function GlobalStyle() {
@@ -302,7 +351,10 @@ function UserSelect({ users, onSelect, onCreate, onDelete }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
             {users.map((u) => (
               <Card key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", cursor: "pointer" }}>
-                <div onClick={() => onSelect(u)} style={{ flex: 1, fontWeight: 700, fontSize: 15 }}>{u.nome}</div>
+                <div onClick={() => onSelect(u)} style={{ flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
+                  <Avatar src={u.avatar} nome={u.nome} size={34} />
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{u.nome}</span>
+                </div>
                 <button onClick={(e) => { e.stopPropagation(); onDelete(u.id); }} style={{ ...iconBtnStyle, color: ACCENT }} aria-label="Rimuovi profilo">
                   <Icon d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" size={14} />
                 </button>
@@ -320,7 +372,7 @@ function UserSelect({ users, onSelect, onCreate, onDelete }) {
   );
 }
 
-function UserApp({ user, onSwitchUser }) {
+function UserApp({ user, onSwitchUser, updateUserAvatar }) {
   const [tab, setTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(DEFAULT_DATA.profile);
@@ -357,7 +409,7 @@ function UserApp({ user, onSwitchUser }) {
       <Header profile={profile} onSwitchUser={onSwitchUser} />
       <main style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 100px" }}>
         {tab === "dashboard" && <Dashboard profile={enriched} measurements={measurements} workouts={workouts} nutrition={nutrition} goTo={setTab} />}
-        {tab === "profilo" && <Profilo profile={profile} setProfile={setProfile} />}
+        {tab === "profilo" && <Profilo profile={profile} setProfile={setProfile} user={user} updateUserAvatar={updateUserAvatar} />}
         {tab === "composizione" && <Composizione measurements={measurements} setMeasurements={setMeasurements} profile={profile} />}
         {tab === "allenamenti" && <Allenamenti workouts={workouts} setWorkouts={setWorkouts} />}
         {tab === "analisi" && <Analisi profile={enriched} measurements={measurements} />}
@@ -376,7 +428,8 @@ function Header({ profile, onSwitchUser }) {
         <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: 2, color: ACCENT }}>
           IRON<span style={{ color: TEXT }}>LOG</span>
         </div>
-        <button onClick={onSwitchUser} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: MUTED, fontSize: 12, fontWeight: 600 }}>
+        <button onClick={onSwitchUser} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, color: MUTED, fontSize: 12, fontWeight: 600 }}>
+          <Avatar src={profile.fotoProfilo} nome={profile.nome} size={26} />
           {profile.nome ? `Ciao, ${profile.nome}` : "Benvenuto"}
           <Icon d="M17 16l4-4m0 0l-4-4m4 4H7m0-5H5a2 2 0 00-2 2v10a2 2 0 002 2h2" size={14} />
         </button>
@@ -399,23 +452,55 @@ function BottomNav({ tab, setTab }) {
 }
 
 // ---------------- 1. PROFILO ----------------
-function Profilo({ profile, setProfile }) {
+function Profilo({ profile, setProfile, user, updateUserAvatar }) {
   const obiettivi = ["Ipertrofia", "Dimagrimento", "Forza", "Resistenza", "Ricomposizione", "Mantenimento"];
   const [draft, setDraft] = useState(profile);
   const [savedMsg, setSavedMsg] = useState(false);
+  const [photoError, setPhotoError] = useState("");
 
   const isDirty = JSON.stringify(draft) !== JSON.stringify(profile);
 
   const handleSave = () => {
     setProfile(draft);
+    if (updateUserAvatar && user) updateUserAvatar(user.id, draft.fotoProfilo);
     setSavedMsg(true);
     setTimeout(() => setSavedMsg(false), 2000);
+  };
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoError("");
+    try {
+      const dataUrl = await compressImageFile(file, 400, 0.7);
+      setDraft({ ...draft, fotoProfilo: dataUrl });
+    } catch {
+      setPhotoError("Non sono riuscito a caricare questa immagine, riprova con un'altra foto.");
+    }
+    e.target.value = "";
   };
 
   return (
     <div>
       <SectionTitle>Dati personali</SectionTitle>
       <Card>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+          <Avatar src={draft.fotoProfilo} nome={draft.nome} size={64} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ cursor: "pointer" }}>
+              <span style={{ display: "inline-block", background: CARD2, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, color: TEXT }}>
+                {draft.fotoProfilo ? "Cambia foto" : "Carica foto profilo"}
+              </span>
+              <input type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: "none" }} />
+            </label>
+            {draft.fotoProfilo && (
+              <button onClick={() => setDraft({ ...draft, fotoProfilo: "" })} style={{ background: "none", border: "none", color: ACCENT, fontSize: 11, fontWeight: 700, cursor: "pointer", textAlign: "left", padding: 0 }}>
+                Rimuovi foto
+              </button>
+            )}
+            {photoError && <div style={{ fontSize: 11, color: ACCENT }}>{photoError}</div>}
+          </div>
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <Input label="Nome" value={draft.nome} onChange={(e) => setDraft({ ...draft, nome: e.target.value })} placeholder="Il tuo nome" />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -472,8 +557,10 @@ function Profilo({ profile, setProfile }) {
 
 // ---------------- 2. COMPOSIZIONE CORPOREA ----------------
 function Composizione({ measurements, setMeasurements, profile }) {
-  const [form, setForm] = useState({ peso: "", altezza: "", vita: "", collo: "", fianchi: "", petto: "", braccio: "", coscia: "", massaGrassa: "", note: "" });
+  const [form, setForm] = useState({ peso: "", altezza: "", vita: "", collo: "", fianchi: "", petto: "", braccio: "", coscia: "", massaGrassa: "", note: "", foto: [] });
   const [expandedId, setExpandedId] = useState(null);
+  const [photoError, setPhotoError] = useState("");
+  const [lightbox, setLightbox] = useState(null);
 
   const autoBodyFat = calcBodyFatNavy({ sesso: profile?.sesso, vita: form.vita, collo: form.collo, altezza: form.altezza, fianchi: form.fianchi });
   const hasEnoughInputForAuto = form.vita && form.collo && form.altezza && (profile?.sesso !== "F" || form.fianchi);
@@ -484,9 +571,28 @@ function Composizione({ measurements, setMeasurements, profile }) {
     const massaGrassa = autoBodyFat ? round1(autoBodyFat) : form.massaGrassa;
     const entry = { id: uid(), data: new Date().toISOString().slice(0, 10), ...form, massaGrassa };
     setMeasurements([...measurements, entry].sort((a, b) => a.data.localeCompare(b.data)));
-    setForm({ peso: "", altezza: form.altezza, vita: "", collo: form.collo, fianchi: "", petto: "", braccio: "", coscia: "", massaGrassa: "", note: "" });
+    setForm({ peso: "", altezza: form.altezza, vita: "", collo: form.collo, fianchi: "", petto: "", braccio: "", coscia: "", massaGrassa: "", note: "", foto: [] });
   };
   const removeEntry = (id) => setMeasurements(measurements.filter((m) => m.id !== id));
+
+  const handlePhotoAdd = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setPhotoError("");
+    if (form.foto.length + files.length > 6) {
+      setPhotoError("Massimo 6 foto per misurazione, per non riempire lo spazio del dispositivo.");
+      e.target.value = "";
+      return;
+    }
+    try {
+      const compressed = await Promise.all(files.map((f) => compressImageFile(f, 700, 0.55)));
+      setForm((f) => ({ ...f, foto: [...f.foto, ...compressed] }));
+    } catch {
+      setPhotoError("Non sono riuscito a caricare una delle foto, riprova.");
+    }
+    e.target.value = "";
+  };
+  const removePhoto = (idx) => setForm((f) => ({ ...f, foto: f.foto.filter((_, i) => i !== idx) }));
 
   const weights = measurements.map((m) => Number(m.peso)).filter((n) => !isNaN(n));
   const max = weights.length ? Math.max(...weights) : 0;
@@ -530,6 +636,29 @@ function Composizione({ measurements, setMeasurements, profile }) {
         </div>
         <div style={{ marginTop: 10 }}>
           <Input label="Note" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Facoltativo" />
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, marginBottom: 6 }}>Foto progressi (facoltative)</div>
+          {form.foto.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+              {form.foto.map((src, i) => (
+                <div key={i} style={{ position: "relative" }}>
+                  <img src={src} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", border: `1px solid ${BORDER}` }} />
+                  <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: -6, right: -6, background: ACCENT, border: `2px solid ${CARD}`, borderRadius: "50%", width: 20, height: 20, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                    <Icon d="M6 6l12 12M6 18L18 6" size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <label style={{ cursor: "pointer" }}>
+            <span style={{ display: "inline-block", background: CARD2, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, color: TEXT }}>
+              + Aggiungi foto
+            </span>
+            <input type="file" accept="image/*" multiple onChange={handlePhotoAdd} style={{ display: "none" }} />
+          </label>
+          {photoError && <div style={{ fontSize: 11, color: ACCENT, marginTop: 6 }}>{photoError}</div>}
+          <div style={{ fontSize: 11, color: MUTED, marginTop: 6 }}>Le foto restano solo su questo dispositivo/browser: usane poche per non riempire lo spazio disponibile.</div>
         </div>
         <Button onClick={addEntry} style={{ marginTop: 12, width: "100%" }}>Aggiungi misurazione</Button>
       </Card>
@@ -597,11 +726,27 @@ function Composizione({ measurements, setMeasurements, profile }) {
                     <div>{m.note}</div>
                   </div>
                 )}
+                {m.foto && m.foto.length > 0 && (
+                  <div style={{ gridColumn: "1 / -1", marginTop: 4 }}>
+                    <div style={{ color: MUTED, marginBottom: 6 }}>Foto</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {m.foto.map((src, i) => (
+                        <img key={i} src={src} alt="" onClick={(e) => { e.stopPropagation(); setLightbox(src); }} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", border: `1px solid ${BORDER}`, cursor: "pointer" }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </Card>
         ))}
       </div>
+
+      {lightbox && (
+        <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
+          <img src={lightbox} alt="" style={{ maxWidth: "100%", maxHeight: "90vh", borderRadius: 10 }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -664,10 +809,12 @@ function computePRs(workouts) {
   return Object.entries(map).map(([nome, max]) => ({ nome, max })).sort((a, b) => b.max - a.max);
 }
 
-// Emette un breve bip usando l'audio nativo del browser, senza bisogno di file esterni.
-function playBeep() {
+// Emette un breve bip usando l'audio nativo del browser. L'AudioContext va creato/sbloccato
+// durante un vero tocco dell'utente (es. il click su "Avvia"), altrimenti i browser mobili
+// bloccano l'audio se arriva da un timer automatico.
+function playBeep(ctx) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!ctx) return;
     [0, 0.25, 0.5].forEach((delay) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -693,6 +840,7 @@ function RestTimer({ initialSeconds, onClose }) {
   const [duration, setDuration] = useState(clampTimer(Math.round((Number(initialSeconds) || 60) / 15) * 15));
   const [remaining, setRemaining] = useState(duration);
   const [running, setRunning] = useState(false);
+  const audioCtxRef = useRef(null);
 
   useEffect(() => {
     if (!running) setRemaining(duration);
@@ -701,7 +849,7 @@ function RestTimer({ initialSeconds, onClose }) {
   useEffect(() => {
     if (!running) return;
     if (remaining <= 0) {
-      playBeep();
+      playBeep(audioCtxRef.current);
       setRunning(false);
       return;
     }
@@ -711,6 +859,24 @@ function RestTimer({ initialSeconds, onClose }) {
 
   const adjust = (delta) => setDuration((d) => clampTimer(d + delta));
   const pct = duration ? ((duration - remaining) / duration) * 100 : 0;
+
+  const handleToggle = () => {
+    if (!running) {
+      // Sblocca/crea l'AudioContext PROPRIO ora, dentro il click: è l'unico momento
+      // in cui i browser permettono di riprodurre audio in seguito senza altro tocco.
+      if (!audioCtxRef.current) {
+        try {
+          audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+          console.error(e);
+        }
+      } else if (audioCtxRef.current.state === "suspended") {
+        audioCtxRef.current.resume();
+      }
+      if (remaining === 0) setRemaining(duration);
+    }
+    setRunning(!running);
+  };
 
   return (
     <Card style={{ marginTop: 8, background: CARD2 }}>
@@ -731,7 +897,7 @@ function RestTimer({ initialSeconds, onClose }) {
         <button onClick={() => adjust(15)} disabled={running} style={{ ...iconBtnStyle, opacity: running ? 0.3 : 1, padding: "10px 14px" }}>+15</button>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <Button onClick={() => setRunning(!running)} style={{ flex: 1 }}>{running ? "Pausa" : remaining === 0 ? "Ricomincia" : "Avvia"}</Button>
+        <Button onClick={handleToggle} style={{ flex: 1 }}>{running ? "Pausa" : remaining === 0 ? "Ricomincia" : "Avvia"}</Button>
         <Button variant="secondary" onClick={() => { setRunning(false); setRemaining(duration); }} style={{ flex: 1 }}>Reset</Button>
       </div>
     </Card>
@@ -897,18 +1063,179 @@ function Analisi({ profile, measurements }) {
 }
 
 // ---------------- 5. NUTRIZIONE ----------------
+// ---------------- Elaboratore piano alimentare ----------------
+const GIORNI_SETTIMANA = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
+const DURATA_PIANO_GIORNI = 35; // 5 settimane
+
+// Database pasti: ogni voce ha un tempo di preparazione indicativo (minuti), tag dietetici
+// e allergeni/intolleranze presenti, usati per filtrare in base al profilo dell'utente.
+const MEAL_DB = {
+  colazione: [
+    { nome: "Yogurt greco, miele e frutta secca", tempoMin: 5, tags: ["vegetariano", "senza glutine"], allergeni: ["lattosio", "frutta a guscio"] },
+    { nome: "Porridge di avena con frutta fresca", tempoMin: 10, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
+    { nome: "Uova strapazzate e pane integrale", tempoMin: 10, tags: ["vegetariano"], allergeni: ["uova", "glutine"] },
+    { nome: "Smoothie proteico banana e avena", tempoMin: 5, tags: ["vegetariano"], allergeni: ["lattosio", "glutine"] },
+    { nome: "Pancake proteici", tempoMin: 15, tags: ["vegetariano"], allergeni: ["uova", "glutine", "lattosio"] },
+    { nome: "Fette biscottate con marmellata e spremuta", tempoMin: 5, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
+    { nome: "Skyr con granola senza glutine", tempoMin: 5, tags: ["vegetariano", "senza glutine"], allergeni: ["lattosio"] },
+    { nome: "Toast avocado e uovo in camicia", tempoMin: 15, tags: ["vegetariano"], allergeni: ["uova", "glutine"] },
+  ],
+  spuntino: [
+    { nome: "Mela e una manciata di mandorle", tempoMin: 2, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: ["frutta a guscio"] },
+    { nome: "Yogurt magro", tempoMin: 2, tags: ["vegetariano", "senza glutine"], allergeni: ["lattosio"] },
+    { nome: "Barretta proteica", tempoMin: 1, tags: ["vegetariano"], allergeni: ["frutta a guscio", "lattosio"] },
+    { nome: "Frutta fresca di stagione", tempoMin: 2, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+    { nome: "Bresaola e grissini", tempoMin: 3, tags: [], allergeni: ["glutine"] },
+    { nome: "Hummus di ceci con carote", tempoMin: 5, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+  ],
+  pranzo: [
+    { nome: "Pasta integrale al pomodoro e basilico", tempoMin: 20, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
+    { nome: "Petto di pollo grigliato con riso e verdure", tempoMin: 25, tags: ["senza glutine"], allergeni: [] },
+    { nome: "Insalatona con tonno, uova e legumi", tempoMin: 10, tags: ["senza glutine"], allergeni: ["uova", "pesce"] },
+    { nome: "Riso basmati con salmone e broccoli", tempoMin: 25, tags: ["senza glutine"], allergeni: ["pesce"] },
+    { nome: "Ceci in umido con verdure e pane", tempoMin: 20, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
+    { nome: "Bowl di quinoa, ceci e verdure grigliate", tempoMin: 20, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+    { nome: "Filetto di merluzzo al forno con patate", tempoMin: 30, tags: ["senza glutine"], allergeni: ["pesce"] },
+    { nome: "Frittata di verdure con contorno", tempoMin: 15, tags: ["vegetariano", "senza glutine"], allergeni: ["uova"] },
+    { nome: "Pasta al pesto con pinoli", tempoMin: 15, tags: ["vegetariano"], allergeni: ["glutine", "frutta a guscio", "lattosio"] },
+    { nome: "Tacchino alla piastra con verdure grigliate", tempoMin: 25, tags: ["senza glutine"], allergeni: [] },
+  ],
+  merenda: [
+    { nome: "Frutto di stagione", tempoMin: 2, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+    { nome: "Cracker integrali e formaggio spalmabile", tempoMin: 3, tags: ["vegetariano"], allergeni: ["glutine", "lattosio"] },
+    { nome: "Frullato di frutta fresca", tempoMin: 5, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+    { nome: "Noci e frutta secca mista", tempoMin: 1, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: ["frutta a guscio"] },
+    { nome: "Yogurt vegetale e cioccolato fondente", tempoMin: 2, tags: ["vegetariano", "vegano"], allergeni: [] },
+  ],
+  cena: [
+    { nome: "Zuppa di legumi e verdure", tempoMin: 25, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+    { nome: "Petto di pollo al forno con insalata", tempoMin: 25, tags: ["senza glutine"], allergeni: [] },
+    { nome: "Orata al cartoccio con verdure", tempoMin: 30, tags: ["senza glutine"], allergeni: ["pesce"] },
+    { nome: "Tofu saltato con verdure e riso", tempoMin: 20, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: ["soia"] },
+    { nome: "Frittata con verdure e insalata", tempoMin: 15, tags: ["vegetariano", "senza glutine"], allergeni: ["uova"] },
+    { nome: "Hamburger di manzo magro con contorno", tempoMin: 20, tags: ["senza glutine"], allergeni: [] },
+    { nome: "Minestrone di verdure con crostini", tempoMin: 30, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
+    { nome: "Gamberi saltati con verdure", tempoMin: 15, tags: ["senza glutine"], allergeni: ["crostacei"] },
+  ],
+};
+
+function normalizeTag(s) {
+  return (s || "").toLowerCase().trim();
+}
+
+// Determina, dal profilo, quali allergeni/intolleranze evitare e quali tag dietetici richiedere.
+function buildDietFilters(profile) {
+  const escludi = new Set();
+  (profile?.allergie || []).forEach((a) => escludi.add(normalizeTag(a)));
+  (profile?.intolleranze || []).forEach((a) => escludi.add(normalizeTag(a)));
+  const richiedi = new Set();
+  (profile?.preferenze || []).forEach((p) => {
+    const n = normalizeTag(p);
+    if (n.includes("vegan")) richiedi.add("vegano");
+    else if (n.includes("vegetarian")) richiedi.add("vegetariano");
+    else if (n.includes("senza glutine") || n.includes("celiac")) richiedi.add("senza glutine");
+    if (n.includes("no pesce") || n.includes("niente pesce")) escludi.add("pesce");
+    if (n.includes("no carne")) richiedi.add("vegetariano");
+  });
+  return { escludi, richiedi };
+}
+
+function filterMeals(list, { escludi, richiedi }, tempoMax) {
+  return list.filter((m) => {
+    if (m.tempoMin > tempoMax) return false;
+    if (m.allergeni.some((a) => escludi.has(a))) return false;
+    if (richiedi.size > 0 && ![...richiedi].every((r) => m.tags.includes(r))) return false;
+    return true;
+  });
+}
+
+const TEMPO_MAX_MINUTI = { poco: 12, medio: 22, tanto: 45 };
+
+function generateMealPlan(profile, tempoDisponibile) {
+  const filters = buildDietFilters(profile);
+  const tempoMax = TEMPO_MAX_MINUTI[tempoDisponibile] || 22;
+
+  const pools = {};
+  Object.keys(MEAL_DB).forEach((slot) => {
+    let filtered = filterMeals(MEAL_DB[slot], filters, tempoMax);
+    if (filtered.length === 0) filtered = filterMeals(MEAL_DB[slot], filters, 999); // fallback: ignora il tempo se troppo restrittivo
+    if (filtered.length === 0) filtered = MEAL_DB[slot]; // fallback estremo: mostra tutto, meglio di niente
+    pools[slot] = filtered;
+  });
+
+  // Rotazione con mescolamento ad ogni ciclo completo, per variare senza ripetere troppo vicino.
+  const cursors = {};
+  const shuffled = {};
+  Object.keys(pools).forEach((slot) => {
+    shuffled[slot] = [...pools[slot]].sort(() => Math.random() - 0.5);
+    cursors[slot] = 0;
+  });
+  const pick = (slot) => {
+    if (cursors[slot] >= shuffled[slot].length) {
+      shuffled[slot] = [...pools[slot]].sort(() => Math.random() - 0.5);
+      cursors[slot] = 0;
+    }
+    const item = shuffled[slot][cursors[slot]];
+    cursors[slot] += 1;
+    return item;
+  };
+
+  const settimane = [];
+  for (let w = 0; w < 5; w++) {
+    const giorni = [];
+    for (let d = 0; d < 7; d++) {
+      giorni.push({
+        giorno: GIORNI_SETTIMANA[d],
+        pasti: {
+          colazione: pick("colazione"),
+          spuntino: pick("spuntino"),
+          pranzo: pick("pranzo"),
+          merenda: pick("merenda"),
+          cena: pick("cena"),
+        },
+      });
+    }
+    settimane.push(giorni);
+  }
+
+  return { generatedAt: new Date().toISOString().slice(0, 10), tempoDisponibile, settimane };
+}
+
+function planIsExpired(piano) {
+  if (!piano) return false;
+  const start = new Date(piano.generatedAt);
+  const now = new Date();
+  const days = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+  return days >= DURATA_PIANO_GIORNI;
+}
+
 function Nutrizione({ nutrition, setNutrition, profile }) {
   const bmr = calcBMR(profile);
   const tdee = calcTDEE(bmr, profile.attivita);
   const suggested = tdee ? Math.round(tdee) : null;
 
-  const addPasto = () => setNutrition({ ...nutrition, pasti: [...nutrition.pasti, { id: uid(), nome: "Pasto", contenuto: "" }] });
-  const updatePasto = (id, patch) => setNutrition({ ...nutrition, pasti: nutrition.pasti.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
-  const removePasto = (id) => setNutrition({ ...nutrition, pasti: nutrition.pasti.filter((p) => p.id !== id) });
 
   const addSpesa = (nome) => setNutrition({ ...nutrition, listaSpesa: [...nutrition.listaSpesa, { id: uid(), nome, fatto: false }] });
   const toggleSpesa = (id) => setNutrition({ ...nutrition, listaSpesa: nutrition.listaSpesa.map((s) => (s.id === id ? { ...s, fatto: !s.fatto } : s)) });
   const removeSpesa = (id) => setNutrition({ ...nutrition, listaSpesa: nutrition.listaSpesa.filter((s) => s.id !== id) });
+
+  const [showGenForm, setShowGenForm] = useState(false);
+  const [tempoScelto, setTempoScelto] = useState("medio");
+  const [weekTab, setWeekTab] = useState(0);
+  const [dayOpen, setDayOpen] = useState(null);
+
+  const piano = nutrition.pianoGenerato;
+  const scaduto = planIsExpired(piano);
+
+  const handleGenera = () => {
+    const nuovoPiano = generateMealPlan(profile, tempoScelto);
+    setNutrition({ ...nutrition, pianoGenerato: nuovoPiano });
+    setShowGenForm(false);
+    setWeekTab(0);
+    setDayOpen(null);
+  };
+
+  const scadenza = piano ? new Date(new Date(piano.generatedAt).getTime() + DURATA_PIANO_GIORNI * 86400000).toLocaleDateString("it-IT") : null;
 
   return (
     <div>
@@ -927,19 +1254,138 @@ function Nutrizione({ nutrition, setNutrition, profile }) {
         </div>
       </Card>
 
-      <SectionTitle action={<Button onClick={addPasto}>+ Pasto</Button>}>Piano alimentare</SectionTitle>
-      {nutrition.pasti.length === 0 && <EmptyHint text="Aggiungi i pasti del tuo piano alimentare." />}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {nutrition.pasti.map((p) => (
-          <Card key={p.id}>
-            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-              <input value={p.nome} onChange={(e) => updatePasto(p.id, { nome: e.target.value })} style={{ ...miniInput, flex: 1, fontWeight: 700 }} placeholder="Nome pasto" />
-              <button onClick={() => removePasto(p.id)} style={{ ...iconBtnStyle, color: ACCENT }}><Icon d="M6 6l12 12M6 18L18 6" size={14} /></button>
+      <SectionTitle>Piano alimentare</SectionTitle>
+      {!piano && (
+        <div>
+          {!showGenForm ? (
+            <Card style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 13, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+                Genero per te un piano di 5 pasti al giorno (colazione, spuntino, pranzo, merenda, cena) da lunedì a domenica, valido 5 settimane — basato su allergie, intolleranze e preferenze già in Profilo.
+              </div>
+              <Button onClick={() => setShowGenForm(true)}>Genera il mio piano</Button>
+            </Card>
+          ) : (
+            <Card>
+              <div style={{ fontSize: 12, color: MUTED, fontWeight: 700, marginBottom: 10 }}>QUANTO TEMPO HAI PER PREPARARE I PASTI?</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                {[
+                  { value: "poco", label: "Poco", desc: "Solo ricette veloci, entro 10-15 minuti" },
+                  { value: "medio", label: "Medio", desc: "Ricette normali, fino a 20-25 minuti" },
+                  { value: "tanto", label: "Tanto", desc: "Anche ricette più elaborate" },
+                ].map((opt) => (
+                  <div
+                    key={opt.value}
+                    onClick={() => setTempoScelto(opt.value)}
+                    style={{ border: `1px solid ${tempoScelto === opt.value ? ACCENT : BORDER}`, background: tempoScelto === opt.value ? "rgba(232,50,58,0.08)" : CARD2, borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{opt.label}</div>
+                    <div style={{ fontSize: 11, color: MUTED }}>{opt.desc}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: MUTED, marginBottom: 14 }}>
+                Userò le allergie ({(profile.allergie || []).join(", ") || "nessuna"}), intolleranze ({(profile.intolleranze || []).join(", ") || "nessuna"}) e preferenze ({(profile.preferenze || []).join(", ") || "nessuna"}) già impostate in Profilo. Puoi aggiornarle lì prima di generare.
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button variant="secondary" onClick={() => setShowGenForm(false)} style={{ flex: 1 }}>Annulla</Button>
+                <Button onClick={handleGenera} style={{ flex: 1 }}>Genera piano</Button>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {piano && scaduto && (
+        <Card style={{ borderColor: ACCENT2 }}>
+          <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>Il tuo piano di 5 settimane è terminato</div>
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>Era iniziato il {new Date(piano.generatedAt).toLocaleDateString("it-IT")}. Richiedine uno nuovo quando vuoi.</div>
+          {!showGenForm ? (
+            <Button onClick={() => setShowGenForm(true)}>Richiedi un nuovo piano</Button>
+          ) : (
+            <div>
+              <div style={{ fontSize: 12, color: MUTED, fontWeight: 700, marginBottom: 10 }}>QUANTO TEMPO HAI PER PREPARARE I PASTI?</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                {[
+                  { value: "poco", label: "Poco", desc: "Solo ricette veloci, entro 10-15 minuti" },
+                  { value: "medio", label: "Medio", desc: "Ricette normali, fino a 20-25 minuti" },
+                  { value: "tanto", label: "Tanto", desc: "Anche ricette più elaborate" },
+                ].map((opt) => (
+                  <div key={opt.value} onClick={() => setTempoScelto(opt.value)} style={{ border: `1px solid ${tempoScelto === opt.value ? ACCENT : BORDER}`, background: tempoScelto === opt.value ? "rgba(232,50,58,0.08)" : CARD2, borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{opt.label}</div>
+                    <div style={{ fontSize: 11, color: MUTED }}>{opt.desc}</div>
+                  </div>
+                ))}
+              </div>
+              <Button onClick={handleGenera} style={{ width: "100%" }}>Genera nuovo piano</Button>
             </div>
-            <textarea value={p.contenuto} onChange={(e) => updatePasto(p.id, { contenuto: e.target.value })} placeholder="Alimenti e quantità" rows={2} style={{ ...miniInput, resize: "vertical" }} />
-          </Card>
-        ))}
-      </div>
+          )}
+        </Card>
+      )}
+
+      {piano && !scaduto && (
+        <div>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 10 }}>
+            Piano valido fino al <span style={{ color: TEXT, fontWeight: 700 }}>{scadenza}</span> · tempo di preparazione: {tempoScelto === "poco" ? "poco" : piano.tempoDisponibile}
+          </div>
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 12, paddingBottom: 4 }}>
+            {piano.settimane.map((_, i) => (
+              <button key={i} onClick={() => { setWeekTab(i); setDayOpen(null); }} style={{ flexShrink: 0, background: weekTab === i ? ACCENT : CARD2, color: weekTab === i ? "#fff" : TEXT, border: "none", borderRadius: 20, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                Sett. {i + 1}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {piano.settimane[weekTab].map((giorno, i) => (
+              <Card key={i} style={{ padding: "12px 14px", cursor: "pointer" }} onClick={() => setDayOpen(dayOpen === i ? null : i)}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontWeight: 800, fontSize: 14 }}>{giorno.giorno}</span>
+                  <span style={{ color: MUTED, transform: dayOpen === i ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
+                    <Icon d="M6 9l6 6 6-6" size={16} />
+                  </span>
+                </div>
+                {dayOpen === i && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[
+                      ["Colazione", giorno.pasti.colazione],
+                      ["Spuntino", giorno.pasti.spuntino],
+                      ["Pranzo", giorno.pasti.pranzo],
+                      ["Merenda", giorno.pasti.merenda],
+                      ["Cena", giorno.pasti.cena],
+                    ].map(([label, item]) => (
+                      <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, gap: 10 }}>
+                        <span style={{ color: MUTED, fontWeight: 700, flexShrink: 0, width: 70 }}>{label}</span>
+                        <span style={{ textAlign: "right" }}>{item?.nome || "—"}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+          <Button variant="secondary" onClick={() => setShowGenForm(true)} style={{ marginTop: 14, width: "100%" }}>Rigenera piano</Button>
+          {showGenForm && (
+            <Card style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 12, color: MUTED, fontWeight: 700, marginBottom: 10 }}>QUANTO TEMPO HAI PER PREPARARE I PASTI?</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                {[
+                  { value: "poco", label: "Poco", desc: "Solo ricette veloci, entro 10-15 minuti" },
+                  { value: "medio", label: "Medio", desc: "Ricette normali, fino a 20-25 minuti" },
+                  { value: "tanto", label: "Tanto", desc: "Anche ricette più elaborate" },
+                ].map((opt) => (
+                  <div key={opt.value} onClick={() => setTempoScelto(opt.value)} style={{ border: `1px solid ${tempoScelto === opt.value ? ACCENT : BORDER}`, background: tempoScelto === opt.value ? "rgba(232,50,58,0.08)" : CARD2, borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{opt.label}</div>
+                    <div style={{ fontSize: 11, color: MUTED }}>{opt.desc}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button variant="secondary" onClick={() => setShowGenForm(false)} style={{ flex: 1 }}>Annulla</Button>
+                <Button onClick={handleGenera} style={{ flex: 1 }}>Conferma rigenerazione</Button>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
 
       <SectionTitle>Alimenti da evitare</SectionTitle>
       <Card>
