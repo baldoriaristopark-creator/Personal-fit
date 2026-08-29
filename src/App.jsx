@@ -1071,51 +1071,51 @@ const DURATA_PIANO_GIORNI = 35; // 5 settimane
 // e allergeni/intolleranze presenti, usati per filtrare in base al profilo dell'utente.
 const MEAL_DB = {
   colazione: [
-    { nome: "Yogurt greco, miele e frutta secca", tempoMin: 5, tags: ["vegetariano", "senza glutine"], allergeni: ["lattosio", "frutta a guscio"] },
-    { nome: "Porridge di avena con frutta fresca", tempoMin: 10, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
-    { nome: "Uova strapazzate e pane integrale", tempoMin: 10, tags: ["vegetariano"], allergeni: ["uova", "glutine"] },
-    { nome: "Smoothie proteico banana e avena", tempoMin: 5, tags: ["vegetariano"], allergeni: ["lattosio", "glutine"] },
-    { nome: "Pancake proteici", tempoMin: 15, tags: ["vegetariano"], allergeni: ["uova", "glutine", "lattosio"] },
-    { nome: "Fette biscottate con marmellata e spremuta", tempoMin: 5, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
-    { nome: "Skyr con granola senza glutine", tempoMin: 5, tags: ["vegetariano", "senza glutine"], allergeni: ["lattosio"] },
-    { nome: "Toast avocado e uovo in camicia", tempoMin: 15, tags: ["vegetariano"], allergeni: ["uova", "glutine"] },
+    { nome: "Yogurt greco, miele e frutta secca", porzione: "200g yogurt + 15g miele + 20g frutta secca", tempoMin: 5, tags: ["vegetariano", "senza glutine"], allergeni: ["lattosio", "frutta a guscio"] },
+    { nome: "Porridge di avena con frutta fresca", porzione: "50g fiocchi d'avena + 150g frutta", tempoMin: 10, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
+    { nome: "Uova strapazzate e pane integrale", porzione: "2 uova + 60g pane integrale", tempoMin: 10, tags: ["vegetariano"], allergeni: ["uova", "glutine"] },
+    { nome: "Smoothie proteico banana e avena", porzione: "1 banana + 30g avena + 200ml latte/bevanda", tempoMin: 5, tags: ["vegetariano"], allergeni: ["lattosio", "glutine"] },
+    { nome: "Pancake proteici", porzione: "3 pancake (circa 150g) + frutta a piacere", tempoMin: 15, tags: ["vegetariano"], allergeni: ["uova", "glutine", "lattosio"] },
+    { nome: "Fette biscottate con marmellata e spremuta", porzione: "4 fette + 20g marmellata + 1 spremuta", tempoMin: 5, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
+    { nome: "Skyr con granola senza glutine", porzione: "200g skyr + 30g granola", tempoMin: 5, tags: ["vegetariano", "senza glutine"], allergeni: ["lattosio"] },
+    { nome: "Toast avocado e uovo in camicia", porzione: "2 fette pane + 1/2 avocado + 1 uovo", tempoMin: 15, tags: ["vegetariano"], allergeni: ["uova", "glutine"] },
   ],
   spuntino: [
-    { nome: "Mela e una manciata di mandorle", tempoMin: 2, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: ["frutta a guscio"] },
-    { nome: "Yogurt magro", tempoMin: 2, tags: ["vegetariano", "senza glutine"], allergeni: ["lattosio"] },
-    { nome: "Barretta proteica", tempoMin: 1, tags: ["vegetariano"], allergeni: ["frutta a guscio", "lattosio"] },
-    { nome: "Frutta fresca di stagione", tempoMin: 2, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
-    { nome: "Bresaola e grissini", tempoMin: 3, tags: [], allergeni: ["glutine"] },
-    { nome: "Hummus di ceci con carote", tempoMin: 5, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+    { nome: "Mela e una manciata di mandorle", porzione: "1 mela (150g) + 20g mandorle", tempoMin: 2, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: ["frutta a guscio"] },
+    { nome: "Yogurt magro", porzione: "125g", tempoMin: 2, tags: ["vegetariano", "senza glutine"], allergeni: ["lattosio"] },
+    { nome: "Barretta proteica", porzione: "1 barretta (30-40g)", tempoMin: 1, tags: ["vegetariano"], allergeni: ["frutta a guscio", "lattosio"] },
+    { nome: "Frutta fresca di stagione", porzione: "150-200g", tempoMin: 2, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+    { nome: "Bresaola e grissini", porzione: "50g bresaola + 30g grissini", tempoMin: 3, tags: [], allergeni: ["glutine"] },
+    { nome: "Hummus di ceci con carote", porzione: "50g hummus + 100g carote", tempoMin: 5, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
   ],
   pranzo: [
-    { nome: "Pasta integrale al pomodoro e basilico", tempoMin: 20, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
-    { nome: "Petto di pollo grigliato con riso e verdure", tempoMin: 25, tags: ["senza glutine"], allergeni: [] },
-    { nome: "Insalatona con tonno, uova e legumi", tempoMin: 10, tags: ["senza glutine"], allergeni: ["uova", "pesce"] },
-    { nome: "Riso basmati con salmone e broccoli", tempoMin: 25, tags: ["senza glutine"], allergeni: ["pesce"] },
-    { nome: "Ceci in umido con verdure e pane", tempoMin: 20, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
-    { nome: "Bowl di quinoa, ceci e verdure grigliate", tempoMin: 20, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
-    { nome: "Filetto di merluzzo al forno con patate", tempoMin: 30, tags: ["senza glutine"], allergeni: ["pesce"] },
-    { nome: "Frittata di verdure con contorno", tempoMin: 15, tags: ["vegetariano", "senza glutine"], allergeni: ["uova"] },
-    { nome: "Pasta al pesto con pinoli", tempoMin: 15, tags: ["vegetariano"], allergeni: ["glutine", "frutta a guscio", "lattosio"] },
-    { nome: "Tacchino alla piastra con verdure grigliate", tempoMin: 25, tags: ["senza glutine"], allergeni: [] },
+    { nome: "Pasta integrale al pomodoro e basilico", porzione: "80g pasta + 150g pomodoro", tempoMin: 20, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
+    { nome: "Petto di pollo grigliato con riso e verdure", porzione: "150g pollo + 70g riso + 150g verdure", tempoMin: 25, tags: ["senza glutine"], allergeni: [] },
+    { nome: "Insalatona con tonno, uova e legumi", porzione: "150g insalata + 80g tonno + 1 uovo + 50g legumi", tempoMin: 10, tags: ["senza glutine"], allergeni: ["uova", "pesce"] },
+    { nome: "Riso basmati con salmone e broccoli", porzione: "70g riso + 130g salmone + 150g broccoli", tempoMin: 25, tags: ["senza glutine"], allergeni: ["pesce"] },
+    { nome: "Ceci in umido con verdure e pane", porzione: "150g ceci + 100g verdure + 40g pane", tempoMin: 20, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
+    { nome: "Bowl di quinoa, ceci e verdure grigliate", porzione: "70g quinoa + 100g ceci + 150g verdure", tempoMin: 20, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+    { nome: "Filetto di merluzzo al forno con patate", porzione: "150g merluzzo + 200g patate", tempoMin: 30, tags: ["senza glutine"], allergeni: ["pesce"] },
+    { nome: "Frittata di verdure con contorno", porzione: "2-3 uova + 100g verdure + contorno 100g", tempoMin: 15, tags: ["vegetariano", "senza glutine"], allergeni: ["uova"] },
+    { nome: "Pasta al pesto con pinoli", porzione: "80g pasta + 30g pesto", tempoMin: 15, tags: ["vegetariano"], allergeni: ["glutine", "frutta a guscio", "lattosio"] },
+    { nome: "Tacchino alla piastra con verdure grigliate", porzione: "150g tacchino + 200g verdure", tempoMin: 25, tags: ["senza glutine"], allergeni: [] },
   ],
   merenda: [
-    { nome: "Frutto di stagione", tempoMin: 2, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
-    { nome: "Cracker integrali e formaggio spalmabile", tempoMin: 3, tags: ["vegetariano"], allergeni: ["glutine", "lattosio"] },
-    { nome: "Frullato di frutta fresca", tempoMin: 5, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
-    { nome: "Noci e frutta secca mista", tempoMin: 1, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: ["frutta a guscio"] },
-    { nome: "Yogurt vegetale e cioccolato fondente", tempoMin: 2, tags: ["vegetariano", "vegano"], allergeni: [] },
+    { nome: "Frutto di stagione", porzione: "150-200g", tempoMin: 2, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+    { nome: "Cracker integrali e formaggio spalmabile", porzione: "30g cracker + 30g formaggio", tempoMin: 3, tags: ["vegetariano"], allergeni: ["glutine", "lattosio"] },
+    { nome: "Frullato di frutta fresca", porzione: "200-250ml", tempoMin: 5, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+    { nome: "Noci e frutta secca mista", porzione: "25-30g", tempoMin: 1, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: ["frutta a guscio"] },
+    { nome: "Yogurt vegetale e cioccolato fondente", porzione: "150g yogurt + 10g cioccolato", tempoMin: 2, tags: ["vegetariano", "vegano"], allergeni: [] },
   ],
   cena: [
-    { nome: "Zuppa di legumi e verdure", tempoMin: 25, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
-    { nome: "Petto di pollo al forno con insalata", tempoMin: 25, tags: ["senza glutine"], allergeni: [] },
-    { nome: "Orata al cartoccio con verdure", tempoMin: 30, tags: ["senza glutine"], allergeni: ["pesce"] },
-    { nome: "Tofu saltato con verdure e riso", tempoMin: 20, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: ["soia"] },
-    { nome: "Frittata con verdure e insalata", tempoMin: 15, tags: ["vegetariano", "senza glutine"], allergeni: ["uova"] },
-    { nome: "Hamburger di manzo magro con contorno", tempoMin: 20, tags: ["senza glutine"], allergeni: [] },
-    { nome: "Minestrone di verdure con crostini", tempoMin: 30, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
-    { nome: "Gamberi saltati con verdure", tempoMin: 15, tags: ["senza glutine"], allergeni: ["crostacei"] },
+    { nome: "Zuppa di legumi e verdure", porzione: "300ml zuppa (circa 150g legumi)", tempoMin: 25, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: [] },
+    { nome: "Petto di pollo al forno con insalata", porzione: "150g pollo + 100g insalata", tempoMin: 25, tags: ["senza glutine"], allergeni: [] },
+    { nome: "Orata al cartoccio con verdure", porzione: "180g orata + 150g verdure", tempoMin: 30, tags: ["senza glutine"], allergeni: ["pesce"] },
+    { nome: "Tofu saltato con verdure e riso", porzione: "150g tofu + 150g verdure + 60g riso", tempoMin: 20, tags: ["vegetariano", "vegano", "senza glutine"], allergeni: ["soia"] },
+    { nome: "Frittata con verdure e insalata", porzione: "2-3 uova + 100g verdure + insalata 80g", tempoMin: 15, tags: ["vegetariano", "senza glutine"], allergeni: ["uova"] },
+    { nome: "Hamburger di manzo magro con contorno", porzione: "150g hamburger + 150g contorno", tempoMin: 20, tags: ["senza glutine"], allergeni: [] },
+    { nome: "Minestrone di verdure con crostini", porzione: "300ml minestrone + 30g crostini", tempoMin: 30, tags: ["vegetariano", "vegano"], allergeni: ["glutine"] },
+    { nome: "Gamberi saltati con verdure", porzione: "150g gamberi + 150g verdure", tempoMin: 15, tags: ["senza glutine"], allergeni: ["crostacei"] },
   ],
 };
 
@@ -1354,7 +1354,10 @@ function Nutrizione({ nutrition, setNutrition, profile }) {
                     ].map(([label, item]) => (
                       <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, gap: 10 }}>
                         <span style={{ color: MUTED, fontWeight: 700, flexShrink: 0, width: 70 }}>{label}</span>
-                        <span style={{ textAlign: "right" }}>{item?.nome || "—"}</span>
+                        <span style={{ textAlign: "right" }}>
+                          {item?.nome || "—"}
+                          {item?.porzione && <div style={{ color: MUTED, fontSize: 11, marginTop: 1 }}>{item.porzione}</div>}
+                        </span>
                       </div>
                     ))}
                   </div>
