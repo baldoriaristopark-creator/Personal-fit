@@ -207,6 +207,8 @@ function bmiCategoria(bmi) {
   if (bmi < 30) return "Sovrappeso";
   return "Obesità";
 }
+const GRUPPI_MUSCOLARI = ["Petto", "Schiena", "Spalle", "Bicipiti", "Tricipiti", "Gambe", "Glutei", "Addome", "Cardio", "Full body"];
+
 const ATTIVITA_OPTS = [
   { value: "1.2", label: "Sedentario (poco/nessun esercizio)" },
   { value: "1.375", label: "Leggero (1-3 giorni/sett.)" },
@@ -663,7 +665,7 @@ function computePRs(workouts) {
 }
 
 function WorkoutCard({ workout, editing, onEdit, onRemove, onUpdate, openLog, onToggleLog }) {
-  const addExercise = () => onUpdate({ esercizi: [...workout.esercizi, { id: uid(), nome: "", serie: 3, ripetizioni: "10", carico: "", recupero: "90" }] });
+  const addExercise = () => onUpdate({ esercizi: [...workout.esercizi, { id: uid(), nome: "", gruppoMuscolare: "", serie: 3, ripetizioni: "10", carico: "", recupero: "90" }] });
   const updateExercise = (id, patch) => onUpdate({ esercizi: workout.esercizi.map((e) => (e.id === id ? { ...e, ...patch } : e)) });
   const removeExercise = (id) => onUpdate({ esercizi: workout.esercizi.filter((e) => e.id !== id) });
 
@@ -690,20 +692,35 @@ function WorkoutCard({ workout, editing, onEdit, onRemove, onUpdate, openLog, on
       <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>{workout.esercizi.length} esercizi · {(workout.log || []).length} sessioni registrate</div>
 
       {(editing || workout.esercizi.length > 0) && (
-        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: editing ? 14 : 8 }}>
           {workout.esercizi.map((e) =>
             editing ? (
-              <div key={e.id} style={{ display: "grid", gridTemplateColumns: "1fr 42px 42px 42px 50px 28px", gap: 5, alignItems: "center" }}>
-                <input placeholder="Esercizio" value={e.nome} onChange={(ev) => updateExercise(e.id, { nome: ev.target.value })} style={miniInput} />
-                <input placeholder="Serie" value={e.serie} onChange={(ev) => updateExercise(e.id, { serie: ev.target.value })} style={miniInput} />
-                <input placeholder="Rip." value={e.ripetizioni} onChange={(ev) => updateExercise(e.id, { ripetizioni: ev.target.value })} style={miniInput} />
-                <input placeholder="Kg" value={e.carico} onChange={(ev) => updateExercise(e.id, { carico: ev.target.value })} style={miniInput} />
-                <input placeholder="Rec. s" value={e.recupero} onChange={(ev) => updateExercise(e.id, { recupero: ev.target.value })} style={miniInput} />
-                <button onClick={() => removeExercise(e.id)} style={{ ...iconBtnStyle, color: ACCENT }}><Icon d="M6 6l12 12M6 18L18 6" size={14} /></button>
+              <div key={e.id} style={{ borderBottom: `1px solid ${BORDER}`, paddingBottom: 12 }}>
+                <div style={{ display: "flex", gap: 5, marginBottom: 6 }}>
+                  <input placeholder="Esercizio" value={e.nome} onChange={(ev) => updateExercise(e.id, { nome: ev.target.value })} style={{ ...miniInput, flex: 1.4 }} />
+                  <select value={e.gruppoMuscolare || ""} onChange={(ev) => updateExercise(e.id, { gruppoMuscolare: ev.target.value })} style={{ ...miniInput, flex: 1 }}>
+                    <option value="">Gruppo muscolare</option>
+                    {GRUPPI_MUSCOLARI.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "42px 42px 50px 50px 28px", gap: 5 }}>
+                  <div style={{ fontSize: 9, color: MUTED, textAlign: "center" }}>N. serie</div>
+                  <div style={{ fontSize: 9, color: MUTED, textAlign: "center" }}>Ripetizioni</div>
+                  <div style={{ fontSize: 9, color: MUTED, textAlign: "center" }}>Kg</div>
+                  <div style={{ fontSize: 9, color: MUTED, textAlign: "center" }}>Recupero</div>
+                  <div />
+                  <input value={e.serie} onChange={(ev) => updateExercise(e.id, { serie: ev.target.value })} style={miniInput} />
+                  <input value={e.ripetizioni} onChange={(ev) => updateExercise(e.id, { ripetizioni: ev.target.value })} style={miniInput} />
+                  <input value={e.carico} onChange={(ev) => updateExercise(e.id, { carico: ev.target.value })} style={miniInput} />
+                  <input placeholder="sec." value={e.recupero} onChange={(ev) => updateExercise(e.id, { recupero: ev.target.value })} style={miniInput} />
+                  <button onClick={() => removeExercise(e.id)} style={{ ...iconBtnStyle, color: ACCENT }}><Icon d="M6 6l12 12M6 18L18 6" size={14} /></button>
+                </div>
               </div>
             ) : (
               <div key={e.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, borderBottom: `1px solid ${BORDER}`, paddingBottom: 6 }}>
-                <span>{e.nome || "—"}</span>
+                <span>{e.nome || "—"}{e.gruppoMuscolare ? <span style={{ color: MUTED, fontSize: 11 }}> · {e.gruppoMuscolare}</span> : ""}</span>
                 <span style={{ color: MUTED }}>{e.serie}x{e.ripetizioni} {e.carico ? `· ${e.carico}kg` : ""} {e.recupero ? `· rec. ${e.recupero}s` : ""}</span>
               </div>
             )
