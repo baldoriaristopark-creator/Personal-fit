@@ -215,6 +215,21 @@ const ATTIVITA_OPTS = [
   { value: "1.9", label: "Molto intenso (atleta)" },
 ];
 
+// Metodo US Navy: stima % massa grassa da circonferenze (cm), senza bisogno di plicometro/bioimpedenza.
+function calcBodyFatNavy({ sesso, vita, collo, altezza, fianchi }) {
+  const w = Number(vita), n = Number(collo), h = Number(altezza), hip = Number(fianchi);
+  if (!w || !n || !h) return null;
+  if (sesso === "F") {
+    if (!hip) return null;
+    if (w + hip - n <= 0) return null;
+    const bf = 495 / (1.29579 - 0.35004 * Math.log10(w + hip - n) + 0.221 * Math.log10(h)) - 450;
+    return bf > 0 && bf < 70 ? bf : null;
+  }
+  if (w - n <= 0) return null;
+  const bf = 495 / (1.0324 - 0.19077 * Math.log10(w - n) + 0.15456 * Math.log10(h)) - 450;
+  return bf > 0 && bf < 70 ? bf : null;
+}
+
 // ---------------- APP ROOT ----------------
 export default function App() {
   const [usersLoading, setUsersLoading] = useState(true);
@@ -338,7 +353,7 @@ function UserApp({ user, onSwitchUser }) {
       <main style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 100px" }}>
         {tab === "dashboard" && <Dashboard profile={enriched} measurements={measurements} workouts={workouts} nutrition={nutrition} goTo={setTab} />}
         {tab === "profilo" && <Profilo profile={profile} setProfile={setProfile} />}
-        {tab === "composizione" && <Composizione measurements={measurements} setMeasurements={setMeasurements} />}
+        {tab === "composizione" && <Composizione measurements={measurements} setMeasurements={setMeasurements} profile={profile} />}
         {tab === "allenamenti" && <Allenamenti workouts={workouts} setWorkouts={setWorkouts} />}
         {tab === "analisi" && <Analisi profile={enriched} measurements={measurements} />}
         {tab === "nutrizione" && <Nutrizione nutrition={nutrition} setNutrition={setNutrition} profile={enriched} />}
@@ -451,14 +466,17 @@ function Profilo({ profile, setProfile }) {
 }
 
 // ---------------- 2. COMPOSIZIONE CORPOREA ----------------
-function Composizione({ measurements, setMeasurements }) {
-  const [form, setForm] = useState({ peso: "", altezza: "", vita: "", fianchi: "", petto: "", braccio: "", coscia: "", massaGrassa: "", note: "" });
+function Composizione({ measurements, setMeasurements, profile }) {
+  const [form, setForm] = useState({ peso: "", altezza: "", vita: "", collo: "", fianchi: "", petto: "", braccio: "", coscia: "", massaGrassa: "", note: "" });
+
+  const autoBodyFat = calcBodyFatNavy({ sesso: profile?.sesso, vita: form.vita, collo: form.collo, altezza: form.altezza, fianchi: form.fianchi });
 
   const addEntry = () => {
     if (!form.peso) return;
-    const entry = { id: uid(), data: new Date().toISOString().slice(0, 10), ...form };
+    const massaGrassa = autoBodyFat ? round1(autoBodyFat) : form.massaGrassa;
+    const entry = { id: uid(), data: new Date().toISOString().slice(0, 10), ...form, massaGrassa };
     setMeasurements([...measurements, entry].sort((a, b) => a.data.localeCompare(b.data)));
-    setForm({ peso: "", altezza: form.altezza, vita: "", fianchi: "", petto: "", braccio: "", coscia: "", massaGrassa: "", note: "" });
+    setForm({ peso: "", altezza: form.altezza, vita: "", collo: form.collo, fianchi: "", petto: "", braccio: "", coscia: "", massaGrassa: "", note: "" });
   };
   const removeEntry = (id) => setMeasurements(measurements.filter((m) => m.id !== id));
 
@@ -471,16 +489,29 @@ function Composizione({ measurements, setMeasurements }) {
   return (
     <div>
       <SectionTitle>Nuova misurazione</SectionTitle>
+      <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
+        Inserendo vita, collo e altezza (più fianchi se donna), la massa grassa si calcola da sola con il metodo US Navy — non serve più scriverla a mano.
+      </div>
       <Card>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <Input label="Peso (kg)" type="number" value={form.peso} onChange={(e) => setForm({ ...form, peso: e.target.value })} placeholder="75.5" />
           <Input label="Altezza (cm)" type="number" value={form.altezza} onChange={(e) => setForm({ ...form, altezza: e.target.value })} placeholder="178" />
           <Input label="Vita (cm)" type="number" value={form.vita} onChange={(e) => setForm({ ...form, vita: e.target.value })} placeholder="82" />
+          <Input label="Collo (cm)" type="number" value={form.collo} onChange={(e) => setForm({ ...form, collo: e.target.value })} placeholder="38" />
           <Input label="Fianchi (cm)" type="number" value={form.fianchi} onChange={(e) => setForm({ ...form, fianchi: e.target.value })} placeholder="98" />
           <Input label="Petto (cm)" type="number" value={form.petto} onChange={(e) => setForm({ ...form, petto: e.target.value })} placeholder="100" />
           <Input label="Braccio (cm)" type="number" value={form.braccio} onChange={(e) => setForm({ ...form, braccio: e.target.value })} placeholder="36" />
           <Input label="Coscia (cm)" type="number" value={form.coscia} onChange={(e) => setForm({ ...form, coscia: e.target.value })} placeholder="56" />
-          <Input label="Massa grassa (%)" type="number" value={form.massaGrassa} onChange={(e) => setForm({ ...form, massaGrassa: e.target.value })} placeholder="18" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: MUTED, fontWeight: 600 }}>
+            Massa grassa (%)
+            {autoBodyFat ? (
+              <div style={{ background: CARD2, border: `1px solid ${GOOD}`, borderRadius: 8, padding: "10px 12px", color: GOOD, fontSize: 14, fontWeight: 800 }}>
+                {round1(autoBodyFat)}% <span style={{ color: MUTED, fontWeight: 500, fontSize: 11 }}>(calcolata)</span>
+              </div>
+            ) : (
+              <Input type="number" value={form.massaGrassa} onChange={(e) => setForm({ ...form, massaGrassa: e.target.value })} placeholder="Inserisci vita e collo per il calcolo auto" />
+            )}
+          </div>
         </div>
         <div style={{ marginTop: 10 }}>
           <Input label="Note" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Facoltativo" />
