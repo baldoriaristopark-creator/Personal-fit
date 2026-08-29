@@ -167,6 +167,7 @@ const DEFAULT_DATA = {
   measurements: [],
   workouts: [],
   nutrition: { kcalTarget: "", proteine: "", carboidrati: "", grassi: "", pasti: [], alimentiDaEvitare: [], listaSpesa: [], pianoGenerato: null },
+  trainingPlan: null,
 };
 
 // Adapter di persistenza basato su localStorage: i dati restano sul dispositivo/browser
@@ -192,7 +193,7 @@ async function saveUsers(users) {
 }
 async function loadAll(userId) {
   try {
-    const keys = ["profile", "measurements", "workouts", "nutrition"];
+    const keys = ["profile", "measurements", "workouts", "nutrition", "trainingPlan"];
     const data = { ...DEFAULT_DATA };
     keys.forEach((k) => {
       const raw = localStorage.getItem(`${STORAGE_PREFIX}${userId}:${k}`);
@@ -379,6 +380,7 @@ function UserApp({ user, onSwitchUser, updateUserAvatar }) {
   const [measurements, setMeasurements] = useState([]);
   const [workouts, setWorkouts] = useState([]);
   const [nutrition, setNutrition] = useState(DEFAULT_DATA.nutrition);
+  const [trainingPlan, setTrainingPlan] = useState(DEFAULT_DATA.trainingPlan);
 
   useEffect(() => {
     (async () => {
@@ -387,6 +389,7 @@ function UserApp({ user, onSwitchUser, updateUserAvatar }) {
       setMeasurements(d.measurements);
       setWorkouts(d.workouts);
       setNutrition(d.nutrition);
+      setTrainingPlan(d.trainingPlan);
       setLoading(false);
     })();
   }, [user.id]);
@@ -395,6 +398,7 @@ function UserApp({ user, onSwitchUser, updateUserAvatar }) {
   useEffect(() => { if (!loading) saveKey(user.id, "measurements", measurements); }, [measurements, loading]);
   useEffect(() => { if (!loading) saveKey(user.id, "workouts", workouts); }, [workouts, loading]);
   useEffect(() => { if (!loading) saveKey(user.id, "nutrition", nutrition); }, [nutrition, loading]);
+  useEffect(() => { if (!loading) saveKey(user.id, "trainingPlan", trainingPlan); }, [trainingPlan, loading]);
 
   const lastM = measurements.length ? measurements[measurements.length - 1] : null;
   const enriched = { ...profile, pesoAttuale: lastM?.peso || profile.pesoAttuale };
@@ -411,7 +415,7 @@ function UserApp({ user, onSwitchUser, updateUserAvatar }) {
         {tab === "dashboard" && <Dashboard profile={enriched} measurements={measurements} workouts={workouts} nutrition={nutrition} goTo={setTab} />}
         {tab === "profilo" && <Profilo profile={profile} setProfile={setProfile} user={user} updateUserAvatar={updateUserAvatar} />}
         {tab === "composizione" && <Composizione measurements={measurements} setMeasurements={setMeasurements} profile={profile} />}
-        {tab === "allenamenti" && <Allenamenti workouts={workouts} setWorkouts={setWorkouts} />}
+        {tab === "allenamenti" && <Allenamenti workouts={workouts} setWorkouts={setWorkouts} trainingPlan={trainingPlan} setTrainingPlan={setTrainingPlan} />}
         {tab === "analisi" && <Analisi profile={enriched} measurements={measurements} />}
         {tab === "nutrizione" && <Nutrizione nutrition={nutrition} setNutrition={setNutrition} profile={enriched} />}
         {tab === "integrazioni" && <Integrazioni />}
@@ -752,10 +756,89 @@ function Composizione({ measurements, setMeasurements, profile }) {
 }
 
 // ---------------- 3. ALLENAMENTI ----------------
-function Allenamenti({ workouts, setWorkouts }) {
+// ---------------- Elaboratore piano allenamento ----------------
+const DURATA_PIANO_ALLENAMENTO_GIORNI = 28; // 4 settimane
+const MACCHINE_CARDIO = ["Tapis roulant", "Cyclette", "Ellittica", "Vogatore"];
+
+const ESERCIZI_DB = {
+  Petto: ["Panca piana con bilanciere", "Panca inclinata con manubri", "Croci ai cavi", "Piegamenti sulle braccia", "Chest press alla macchina"],
+  Schiena: ["Lat machine avanti", "Rematore con bilanciere", "Pulley basso", "Trazioni alla sbarra", "Rematore con manubrio"],
+  Spalle: ["Military press con bilanciere", "Alzate laterali con manubri", "Alzate frontali", "Face pull ai cavi", "Shoulder press alla macchina"],
+  Bicipiti: ["Curl con bilanciere", "Curl con manubri alternato", "Curl a martello", "Curl ai cavi"],
+  Tricipiti: ["Push down ai cavi", "French press con bilanciere", "Dip alle parallele", "Kickback con manubri"],
+  Gambe: ["Squat con bilanciere (quadricipiti)", "Leg press (quadricipiti)", "Leg extension (quadricipiti)", "Affondi con manubri (quadricipiti)", "Stacco rumeno (femorali)", "Leg curl (femorali)", "Calf raise in piedi (polpacci)", "Calf raise seduto (polpacci)"],
+  Glutei: ["Hip thrust", "Squat sumo", "Abduttori ai cavi"],
+  Addome: ["Crunch", "Plank", "Russian twist", "Sollevamento gambe"],
+};
+
+function pickExercises(gruppo, count) {
+  const pool = [...(ESERCIZI_DB[gruppo] || [])].sort(() => Math.random() - 0.5);
+  return pool.slice(0, count);
+}
+
+function getSplitAllenamento(sessioni) {
+  switch (sessioni) {
+    case 2:
+      return [
+        { nome: "Giorno A - Full Body", gruppi: ["Petto", "Schiena", "Gambe"] },
+        { nome: "Giorno B - Full Body", gruppi: ["Spalle", "Bicipiti", "Tricipiti", "Addome"] },
+      ];
+    case 3:
+      return [
+        { nome: "Giorno A - Push (Petto/Spalle/Tricipiti)", gruppi: ["Petto", "Spalle", "Tricipiti"] },
+        { nome: "Giorno B - Pull (Schiena/Bicipiti)", gruppi: ["Schiena", "Bicipiti"] },
+        { nome: "Giorno C - Gambe/Addome", gruppi: ["Gambe", "Glutei", "Addome"] },
+      ];
+    case 4:
+      return [
+        { nome: "Giorno A - Petto/Tricipiti", gruppi: ["Petto", "Tricipiti"] },
+        { nome: "Giorno B - Schiena/Bicipiti", gruppi: ["Schiena", "Bicipiti"] },
+        { nome: "Giorno C - Gambe/Glutei", gruppi: ["Gambe", "Glutei"] },
+        { nome: "Giorno D - Spalle/Addome", gruppi: ["Spalle", "Addome"] },
+      ];
+    case 5:
+      return [
+        { nome: "Giorno A - Petto", gruppi: ["Petto"] },
+        { nome: "Giorno B - Schiena", gruppi: ["Schiena"] },
+        { nome: "Giorno C - Gambe/Glutei", gruppi: ["Gambe", "Glutei"] },
+        { nome: "Giorno D - Spalle", gruppi: ["Spalle"] },
+        { nome: "Giorno E - Braccia/Addome", gruppi: ["Bicipiti", "Tricipiti", "Addome"] },
+      ];
+    default:
+      return [
+        { nome: "Giorno A - Push", gruppi: ["Petto", "Spalle", "Tricipiti"] },
+        { nome: "Giorno B - Pull", gruppi: ["Schiena", "Bicipiti"] },
+        { nome: "Giorno C - Gambe/Addome", gruppi: ["Gambe", "Glutei", "Addome"] },
+        { nome: "Giorno D - Push", gruppi: ["Petto", "Spalle", "Tricipiti"] },
+        { nome: "Giorno E - Pull", gruppi: ["Schiena", "Bicipiti"] },
+        { nome: "Giorno F - Gambe/Addome", gruppi: ["Gambe", "Glutei", "Addome"] },
+      ];
+  }
+}
+
+function generateWorkoutPlan(sessioni) {
+  const split = getSplitAllenamento(sessioni);
+  return split.map((giorno) => {
+    const cardio = MACCHINE_CARDIO[Math.floor(Math.random() * MACCHINE_CARDIO.length)];
+    const esercizi = [
+      { id: uid(), nome: `Riscaldamento cardio (${cardio})`, gruppoMuscolare: "Cardio", serie: 1, ripetizioni: "10 min", carico: "", recupero: "" },
+    ];
+    giorno.gruppi.forEach((g) => {
+      pickExercises(g, g === "Gambe" ? 3 : 2).forEach((nomeEs) => {
+        esercizi.push({ id: uid(), nome: nomeEs, gruppoMuscolare: g, serie: 3, ripetizioni: "10-12", carico: "", recupero: "90" });
+      });
+    });
+    esercizi.push({ id: uid(), nome: `Defaticamento cardio (${cardio})`, gruppoMuscolare: "Cardio", serie: 1, ripetizioni: "15 min", carico: "", recupero: "" });
+    return { id: uid(), nome: giorno.nome, esercizi, log: [] };
+  });
+}
+
+function Allenamenti({ workouts, setWorkouts, trainingPlan, setTrainingPlan }) {
   const [editing, setEditing] = useState(null);
   const [openLog, setOpenLog] = useState(null);
   const [showPR, setShowPR] = useState(false);
+  const [showGenForm, setShowGenForm] = useState(false);
+  const [sessioniScelte, setSessioniScelte] = useState(3);
 
   const addWorkout = () => {
     const w = { id: uid(), nome: "Nuova scheda", esercizi: [], log: [] };
@@ -767,8 +850,74 @@ function Allenamenti({ workouts, setWorkouts }) {
 
   const prList = computePRs(workouts);
 
+  const scaduto = trainingPlan && (() => {
+    const days = Math.floor((new Date() - new Date(trainingPlan.generatedAt)) / 86400000);
+    return days >= DURATA_PIANO_ALLENAMENTO_GIORNI;
+  })();
+  const scadenzaAllenamento = trainingPlan ? new Date(new Date(trainingPlan.generatedAt).getTime() + DURATA_PIANO_ALLENAMENTO_GIORNI * 86400000).toLocaleDateString("it-IT") : null;
+
+  const handleGeneraAllenamento = () => {
+    const nuoveSchede = generateWorkoutPlan(sessioniScelte);
+    setWorkouts([...workouts, ...nuoveSchede]);
+    setTrainingPlan({ generatedAt: new Date().toISOString().slice(0, 10), sessioniSettimanali: sessioniScelte, schedeIds: nuoveSchede.map((s) => s.id) });
+    setShowGenForm(false);
+  };
+
+  const generatorForm = (
+    <Card>
+      <div style={{ fontSize: 12, color: MUTED, fontWeight: 700, marginBottom: 10 }}>QUANTE SESSIONI PUOI FARE A SETTIMANA?</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6, marginBottom: 14 }}>
+        {[2, 3, 4, 5, 6].map((n) => (
+          <button key={n} onClick={() => setSessioniScelte(n)} style={{ background: sessioniScelte === n ? ACCENT : CARD2, color: sessioniScelte === n ? "#fff" : TEXT, border: "none", borderRadius: 8, padding: "10px 0", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+            {n}
+          </button>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+        Ti preparo {sessioniScelte} schede, una per giorno di allenamento, con split sui gruppi muscolari (Petto, Dorso, Spalle, Bicipiti, Tricipiti, Gambe, Glutei, Addome). Ogni sessione parte con 10' di cardio e chiude con 15' di defaticamento. Poi puoi modificare liberamente serie, ripetizioni e carichi come su qualsiasi scheda tua.
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <Button variant="secondary" onClick={() => setShowGenForm(false)} style={{ flex: 1 }}>Annulla</Button>
+        <Button onClick={handleGeneraAllenamento} style={{ flex: 1 }}>Genera piano</Button>
+      </div>
+    </Card>
+  );
+
   return (
     <div>
+      {!trainingPlan && !showGenForm && (
+        <Card style={{ textAlign: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 13, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+            Non sai da dove iniziare? Genero per te un piano di allenamento di 4 settimane, diviso per gruppi muscolari, in base a quante volte a settimana puoi allenarti.
+          </div>
+          <Button onClick={() => setShowGenForm(true)}>Elabora piano allenamento</Button>
+        </Card>
+      )}
+      {!trainingPlan && showGenForm && <div style={{ marginBottom: 16 }}>{generatorForm}</div>}
+      {trainingPlan && !scaduto && (
+        <Card style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: MUTED }}>
+            Piano di {trainingPlan.sessioniSettimanali} sessioni/settimana valido fino al <span style={{ color: TEXT, fontWeight: 700 }}>{scadenzaAllenamento}</span>
+          </div>
+          {!showGenForm ? (
+            <Button variant="secondary" onClick={() => setShowGenForm(true)} style={{ marginTop: 10, width: "100%" }}>Elabora un nuovo piano</Button>
+          ) : (
+            <div style={{ marginTop: 12 }}>{generatorForm}</div>
+          )}
+        </Card>
+      )}
+      {trainingPlan && scaduto && (
+        <Card style={{ marginBottom: 16, borderColor: ACCENT2 }}>
+          <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>Il tuo piano di 4 settimane è terminato</div>
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>Era iniziato il {new Date(trainingPlan.generatedAt).toLocaleDateString("it-IT")}. Le vecchie schede restano tra le tue, con tutto lo storico. Richiedine uno nuovo quando vuoi.</div>
+          {!showGenForm ? (
+            <Button onClick={() => setShowGenForm(true)}>Richiedi un nuovo piano</Button>
+          ) : (
+            generatorForm
+          )}
+        </Card>
+      )}
+
       <SectionTitle action={<Button onClick={addWorkout}>+ Scheda</Button>}>Le mie schede</SectionTitle>
       {workouts.length === 0 && <EmptyHint text="Crea la tua prima scheda di allenamento." />}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -964,10 +1113,14 @@ function WorkoutCard({ workout, editing, onEdit, onRemove, onUpdate, openLog, on
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, borderBottom: `1px solid ${BORDER}`, paddingBottom: 6 }}>
                   <span>{e.nome || "—"}{e.gruppoMuscolare ? <span style={{ color: MUTED, fontSize: 11 }}> · {e.gruppoMuscolare}</span> : ""}</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ color: MUTED }}>{e.serie}x{e.ripetizioni} {e.carico ? `· ${e.carico}kg` : ""} {e.recupero ? `· rec. ${e.recupero}s` : ""}</span>
-                    <button onClick={() => setTimerFor(timerFor === e.id ? null : e.id)} style={{ ...iconBtnStyle, color: timerFor === e.id ? ACCENT : TEXT, padding: 5 }} aria-label="Timer di recupero">
-                      <Icon d="M12 8v4l3 3M12 2a10 10 0 100 20 10 10 0 000-20z" size={14} />
-                    </button>
+                    <span style={{ color: MUTED }}>
+                      {e.gruppoMuscolare === "Cardio" ? e.ripetizioni : `${e.serie}x${e.ripetizioni}`} {e.carico ? `· ${e.carico}kg` : ""} {e.recupero ? `· rec. ${e.recupero}s` : ""}
+                    </span>
+                    {e.recupero && (
+                      <button onClick={() => setTimerFor(timerFor === e.id ? null : e.id)} style={{ ...iconBtnStyle, color: timerFor === e.id ? ACCENT : TEXT, padding: 5 }} aria-label="Timer di recupero">
+                        <Icon d="M12 8v4l3 3M12 2a10 10 0 100 20 10 10 0 000-20z" size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 {timerFor === e.id && <RestTimer initialSeconds={e.recupero} onClose={() => setTimerFor(null)} />}
